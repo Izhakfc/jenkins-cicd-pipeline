@@ -2,9 +2,7 @@ pipeline {
     agent any
     
     environment {
-        // Dynamic port assignment based on branch
         APP_PORT = "${BRANCH_NAME == 'main' ? '3000' : '3001'}"
-        // Dynamic image name based on branch
         DOCKER_IMAGE = "${BRANCH_NAME == 'main' ? 'nodemain:v1.0' : 'nodedev:v1.0'}"
     }
     
@@ -16,6 +14,26 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+        
+        stage('Update Logo') {
+            steps {
+                script {
+                    sh '''
+                        echo "Current branch: ${BRANCH_NAME}"
+                        if [ "${BRANCH_NAME}" = "main" ]; then
+                            echo "Copying main logo..."
+                            cp -v logos/main-logo.svg src/logo.svg
+                        else
+                            echo "Copying dev logo..."
+                            cp -v logos/dev-logo.svg src/logo.svg
+                        fi
+                        
+                        echo "Final logo in src directory:"
+                        ls -la src/logo.svg
+                    '''
+                }
             }
         }
         
@@ -31,23 +49,9 @@ pipeline {
             }
         }
         
-        stage('Update Logo') {
-            steps {
-                script {
-                    // Copy appropriate logo based on branch
-                    if (BRANCH_NAME == 'main') {
-                        sh 'cp logos/main-logo.svg public/logo.svg'
-                    } else {
-                        sh 'cp logos/dev-logo.svg public/logo.svg'
-                    }
-                }
-            }
-        }
-        
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Build Docker image with branch-specific tag
                     sh """
                         docker build -t ${DOCKER_IMAGE} \
                         --build-arg PORT=${APP_PORT} .
@@ -59,7 +63,6 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    // Stop and remove existing container for the current environment only
                     sh """
                         CONTAINER_NAME="${BRANCH_NAME}-app"
                         if docker ps -a | grep \$CONTAINER_NAME; then
@@ -74,15 +77,6 @@ pipeline {
                     """
                 }
             }
-        }
-    }
-    
-    post {
-        failure {
-            echo 'Pipeline failed! Sending notifications...'
-        }
-        success {
-            echo 'Pipeline succeeded! Application deployed successfully.'
         }
     }
 }
